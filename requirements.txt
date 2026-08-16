@@ -1,0 +1,16 @@
+# Cursor Set Studio - runtime dependencies
+#
+# Deliberately only two. The .cur and .ani codecs are implemented directly
+# against the file formats in core/cursor_io.py rather than pulling in the
+# usual community packages:
+#
+#   Iconolatry  was never published to PyPI (GitHub source only).
+#   ani_file    imports the stdlib `chunk` module, which PEP 594 removed in
+#               Python 3.13, so it cannot even be imported on 3.13+.
+#
+# Both formats are stable and well documented, so implementing them with
+# `struct` removes two fragile dependencies and gives exact control over
+# hotspots and frame timing.
+
+PySide6>=6.6           # Qt for Python (LGPL). Tested on 6.11.1.
+Pillow>=10.0           # image decoding/scaling. Tested on 12.3.0.

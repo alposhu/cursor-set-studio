@@ -1,0 +1,12 @@
+# Normalise line endings so the repo stays consistent across machines.
+* text=auto eol=lf
+
+# Windows-only scripts must keep CRLF to run correctly.
+*.bat text eol=crlf
+
+# Binary assets - never touch these.
+*.png binary
+*.ico binary
+*.cur binary
+*.ani binary
+*.exe binary

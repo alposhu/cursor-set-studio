@@ -1,0 +1,68 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Core tests
+        # The registry round-trip is skipped on CI: it writes to HKCU and is
+        # only meaningful on a real desktop session.
+        run: python tests/test_core.py
+
+      - name: UI self-test
+        # Builds every screen offscreen and verifies the bundled assets.
+        run: python cursor_set_studio/main.py --selftest
+
+  build:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+
+      - name: Build executable
+        run: python build_exe.py
+
+      - name: Verify the packaged build
+        run: |
+          & ".\dist\Cursor Set Studio.exe" --selftest
+          if ($LASTEXITCODE -ne 0) { throw "self-test failed" }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CursorSetStudio-windows
+          path: dist/Cursor Set Studio.exe
+
+      - name: Attach to release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/Cursor Set Studio.exe
