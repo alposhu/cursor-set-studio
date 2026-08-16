@@ -282,6 +282,10 @@ Windows 10/11 only. Cursor schemes as an OS-integrated concept are a Windows
 idea; Linux (Xcursor) and macOS have no real equivalent. An Xcursor export
 would be an addition to `core/`, not a rewrite.
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md).
+
 ## License
 
 [MIT](LICENSE) © Alperen Karabıyık

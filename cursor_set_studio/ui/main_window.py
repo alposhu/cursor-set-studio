@@ -180,7 +180,7 @@ class MainWindow(QWidget, ResizeMixin):
         self.nav_buttons[CONVERT] = conv
         lay.addWidget(conv)
 
-        credit = QLabel("Cursor Set Studio v1.0<br>by Alperen Karabıyık")
+        credit = QLabel("Cursor Set Studio v1.1<br>by Alperen Karabıyık")
         credit.setObjectName("Dim")
         credit.setTextFormat(Qt.TextFormat.RichText)
         credit.setStyleSheet(
