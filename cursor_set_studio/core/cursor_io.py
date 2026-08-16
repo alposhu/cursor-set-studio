@@ -304,29 +304,51 @@ def read_cur(path: Path) -> list[CursorImage]:
     return read_cur_bytes(data, source=Path(path).name)
 
 
-def write_cur_bytes(images: Sequence[CursorImage]) -> bytes:
-    """Build a .cur blob holding one entry per supplied image."""
+def _write_icondir(images: Sequence[CursorImage], *, cursor: bool) -> bytes:
+    """Build an .ico or .cur blob, one directory entry per image.
+
+    The two formats share a layout and differ only in the type field and in
+    what the two 16-bit fields of each entry mean: for a cursor they carry the
+    hotspot, for an icon they are the colour plane count and bit depth.
+    """
     if not images:
-        raise CursorFormatError("cannot write a cursor with no images")
+        raise CursorFormatError("cannot write a file with no images")
 
     blobs = [_encode_dib(ci.image) for ci in images]
 
-    header = struct.pack("<HHH", 0, 2, len(images))
+    header = struct.pack("<HHH", 0, 2 if cursor else 1, len(images))
     entries = bytearray()
     offset = 6 + len(images) * 16
     for ci, blob in zip(images, blobs):
         w = 0 if ci.width >= 256 else ci.width
         h = 0 if ci.height >= 256 else ci.height
-        hx = min(max(ci.hotspot[0], 0), max(ci.width - 1, 0))
-        hy = min(max(ci.hotspot[1], 0), max(ci.height - 1, 0))
-        entries += struct.pack("<BBBBHHII", w, h, 0, 0, hx, hy, len(blob), offset)
+        if cursor:
+            a = min(max(ci.hotspot[0], 0), max(ci.width - 1, 0))
+            b = min(max(ci.hotspot[1], 0), max(ci.height - 1, 0))
+        else:
+            a, b = 1, 32                 # planes, bits-per-pixel
+        entries += struct.pack("<BBBBHHII", w, h, 0, 0, a, b, len(blob), offset)
         offset += len(blob)
 
     return bytes(header + entries + b"".join(blobs))
 
 
+def write_cur_bytes(images: Sequence[CursorImage]) -> bytes:
+    """Build a .cur blob holding one entry per supplied image."""
+    return _write_icondir(images, cursor=True)
+
+
+def write_ico_bytes(images: Sequence[CursorImage]) -> bytes:
+    """Build an .ico blob. Icons carry no hotspot, so any is discarded."""
+    return _write_icondir(images, cursor=False)
+
+
 def write_cur(images: Sequence[CursorImage], path: Path) -> None:
     Path(path).write_bytes(write_cur_bytes(images))
+
+
+def write_ico(images: Sequence[CursorImage], path: Path) -> None:
+    Path(path).write_bytes(write_ico_bytes(images))
 
 
 # ---------------------------------------------------------------------------

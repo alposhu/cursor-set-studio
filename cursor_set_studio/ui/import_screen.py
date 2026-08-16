@@ -40,7 +40,8 @@ class DropZone(QFrame):
         title.setStyleSheet("font-size:16px; font-weight:600;")
         lay.addWidget(title)
 
-        sub = QLabel("Any folder of .cur and .ani files. Subfolders are included.")
+        sub = QLabel("A folder, or a .zip, .7z or .rar archive. "
+                     "Subfolders are included.")
         sub.setObjectName("Sub")
         sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lay.addWidget(sub)
@@ -48,11 +49,17 @@ class DropZone(QFrame):
         lay.addSpacing(6)
         row = QHBoxLayout()
         row.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        row.setSpacing(8)
         browse = QPushButton("Browse for a folder…")
         browse.setObjectName("Primary")
         browse.setCursor(Qt.CursorShape.PointingHandCursor)
         browse.clicked.connect(self._browse)
         row.addWidget(browse)
+        archive = QPushButton("Open an archive…")
+        archive.setObjectName("Ghost")
+        archive.setCursor(Qt.CursorShape.PointingHandCursor)
+        archive.clicked.connect(self._browse_archive)
+        row.addWidget(archive)
         lay.addLayout(row)
 
     def _browse(self) -> None:
@@ -61,11 +68,19 @@ class DropZone(QFrame):
         if folder:
             self.folder_chosen.emit(Path(folder))
 
+    def _browse_archive(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Choose a cursor pack archive", str(Path.home()),
+            "Archives (*.zip *.7z *.rar);;All files (*)")
+        if path:
+            self.folder_chosen.emit(Path(path))
+
     # -- drag and drop ------------------------------------------------------
     def dragEnterEvent(self, e):
         if e.mimeData().hasUrls() and any(
                 Path(u.toLocalFile()).is_dir() or
-                Path(u.toLocalFile()).suffix.lower() in (".cur", ".ani")
+                Path(u.toLocalFile()).suffix.lower()
+                in (".cur", ".ani", ".zip", ".7z", ".rar")
                 for u in e.mimeData().urls()):
             self._set_hover(True)
             e.acceptProposedAction()
@@ -79,6 +94,10 @@ class DropZone(QFrame):
             p = Path(url.toLocalFile())
             if p.is_dir():
                 self.folder_chosen.emit(p)
+                e.acceptProposedAction()
+                return
+            if p.is_file() and p.suffix.lower() in (".zip", ".7z", ".rar"):
+                self.folder_chosen.emit(p)      # the window extracts it
                 e.acceptProposedAction()
                 return
             if p.is_file() and p.suffix.lower() in (".cur", ".ani"):
@@ -268,11 +287,15 @@ class ImportScreen(QWidget):
 
     # -- progress -----------------------------------------------------------
     def start_progress(self, folder: Path) -> None:
-        self.progress_label.setText(f"Scanning {folder.name}…")
+        verb = "Opening" if folder.is_file() else "Scanning"
+        self.progress_label.setText(f"{verb} {folder.name}…")
         self.progress_count.setText("")
         self.bar.setRange(0, 0)
         self.progress_box.show()
         self.zone.setEnabled(False)
+
+    def set_status(self, text: str) -> None:
+        self.progress_label.setText(text)
 
     def update_progress(self, done: int, total: int) -> None:
         if total > 0:

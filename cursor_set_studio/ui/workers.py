@@ -63,3 +63,75 @@ class StageWorker(QThread):
             self.finished_ok.emit(mapping, warnings, directory)
         except Exception as exc:
             self.failed.emit(str(exc))
+
+
+class ConvertWorker(QThread):
+    """Runs a format conversion off the UI thread."""
+
+    progress = Signal(int, int)
+    finished_ok = Signal(object)         # ConvertReport
+    failed = Signal(str)
+
+    def __init__(self, paths, target, out_dir, options, parent=None):
+        super().__init__(parent)
+        self.paths = list(paths)
+        self.target = target
+        self.out_dir = out_dir
+        self.options = options
+
+    def run(self) -> None:
+        try:
+            from ..core import converter
+            report = converter.convert_files(
+                self.paths, self.target, self.out_dir, self.options,
+                progress=lambda d, t: self.progress.emit(d, t))
+            self.finished_ok.emit(report)
+        except Exception as exc:
+            self.failed.emit(str(exc))
+
+
+class ExtractWorker(QThread):
+    """Extracts an archive, then scans the result, off the UI thread."""
+
+    status = Signal(str)
+    progress = Signal(int, int)
+    finished_ok = Signal(object, object, object)   # ScanResult, label, ExtractResult
+    failed = Signal(str)
+
+    def __init__(self, archive: Path, parent=None):
+        super().__init__(parent)
+        self.archive = Path(archive)
+        self._cancel = False
+
+    def cancel(self) -> None:
+        self._cancel = True
+
+    def run(self) -> None:
+        from ..core import archives
+        extracted = None
+        try:
+            extracted = archives.extract(
+                self.archive, progress=lambda m: self.status.emit(m))
+            if self._cancel:
+                extracted.cleanup()
+                return
+            self.status.emit(f"Scanning {self.archive.name}…")
+            result = scanner.scan_folder(
+                extracted.directory,
+                progress=lambda d, t: self.progress.emit(d, t),
+                cancelled=lambda: self._cancel,
+            )
+            if self._cancel:
+                extracted.cleanup()
+                return
+            # The extracted directory must outlive this worker: the scan
+            # results point into it, so the caller owns cleanup from here.
+            self.finished_ok.emit(result, self.archive, extracted)
+        except archives.ArchiveError as exc:
+            if extracted:
+                extracted.cleanup()
+            self.failed.emit(str(exc))
+        except Exception as exc:
+            if extracted:
+                extracted.cleanup()
+            self.failed.emit(f"could not read {self.archive.name}: {exc}")

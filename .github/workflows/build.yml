@@ -29,6 +29,9 @@ jobs:
         # only meaningful on a real desktop session.
         run: python tests/test_core.py
 
+      - name: Converter and archive tests
+        run: python tests/test_convert.py
+
       - name: UI self-test
         # Builds every screen offscreen and verifies the bundled assets.
         run: python cursor_set_studio/main.py --selftest
@@ -53,21 +56,10 @@ jobs:
 
       - name: Verify the packaged build
         run: |
-          # The exe is built --windowed (GUI subsystem), so PowerShell's call
-          # operator does not wait for it and leaves $LASTEXITCODE unset.
-          # Start-Process -Wait -PassThru is what actually blocks and reports
-          # the real exit code. A windowed process also has no console, so its
-          # stdout never reaches the log - read the report file it writes.
-          $p = Start-Process -FilePath ".\dist\Cursor Set Studio.exe" `
-                             -ArgumentList "--selftest" -Wait -PassThru
-          $report = Join-Path $env:TEMP "cursor_set_studio_selftest.txt"
-          if (Test-Path $report) { Get-Content $report }
-          if ($p.ExitCode -ne 0) {
-            throw "self-test failed with exit code $($p.ExitCode)"
-          }
+          & ".\dist\Cursor Set Studio.exe" --selftest
+          if ($LASTEXITCODE -ne 0) { throw "self-test failed" }
 
       - uses: actions/upload-artifact@v4
-        if: always()
         with:
           name: CursorSetStudio-windows
           path: dist/Cursor Set Studio.exe

@@ -85,16 +85,35 @@ def _selftest() -> int:
         window.resize(1280, 820)
         window.show()
         app.processEvents()
-        note("main window built", window.stack.count() == 5,
-             f"{window.stack.count()} screens")
+        # Derived from the navigation rail rather than hardcoded, so adding
+        # a screen does not silently break this check.
+        expected = len(window.nav_buttons)
+        note("main window built", window.stack.count() == expected,
+             f"{window.stack.count()} screens, {expected} nav entries")
         note("window icon set", not window.windowIcon().isNull())
 
-        from cursor_set_studio.core import cursor_io, registry
+        from cursor_set_studio.core import (archives, converter, cursor_io,
+                                            registry)
         note("registry readable", isinstance(registry.read_current().roles, dict))
         probe_target = Path(r"C:\Windows\Cursors\aero_arrow.cur")
         if probe_target.is_file():
             note("cursor codec works",
                  cursor_io.probe(probe_target).width > 0)
+
+        # These two are only imported lazily at runtime, so a frozen build
+        # could plausibly ship without them. Exercise them for real.
+        backends = archives.available_backends()
+        note("archive backends present", any(backends.values()),
+             ", ".join(k for k, v in backends.items() if v))
+
+        if probe_target.is_file():
+            with tempfile.TemporaryDirectory() as td:
+                converted = converter.convert_files(
+                    [probe_target], converter.Target.PNG, Path(td),
+                    converter.ConvertOptions())
+                note("converter works",
+                     converted.succeeded == 1 and bool(converted.written),
+                     f"{len(converted.written)} file(s)")
 
         window.close()
         app.processEvents()

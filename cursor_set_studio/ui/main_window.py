@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (QApplication, QButtonGroup, QFrame,
 from ..core import registry
 from . import theme
 from .apply_screen import ApplyScreen
+from .convert_screen import ConvertScreen
 from .dialogs import ConfirmDialog
 from .import_screen import ImportScreen
 from .library_screen import LibraryScreen
@@ -21,9 +22,9 @@ from .resources import app_icon
 from .state import AppState
 from .widgets.title_bar import ResizeMixin, TitleBar
 from .widgets.toast import ToastHost
-from .workers import ScanWorker
+from .workers import ExtractWorker, ScanWorker
 
-IMPORT, REVIEW, PREVIEW, APPLY, LIBRARY = range(5)
+IMPORT, REVIEW, PREVIEW, APPLY, LIBRARY, CONVERT = range(6)
 
 STEPS = [
     (IMPORT, "1", "Import"),
@@ -41,6 +42,7 @@ class MainWindow(QWidget, ResizeMixin):
         self.state = AppState()
         self._scan_worker: ScanWorker | None = None
         self._fade: QPropertyAnimation | None = None
+        self._extracted = None      # temp dir from an archive import
 
         self.setWindowTitle("Cursor Set Studio")
         # Set on the window too, not just the application: the window is
@@ -88,9 +90,10 @@ class MainWindow(QWidget, ResizeMixin):
         self.preview_screen = PreviewScreen(self.state)
         self.apply_screen = ApplyScreen(self.state)
         self.library_screen = LibraryScreen()
+        self.convert_screen = ConvertScreen()
 
         for w in (self.import_screen, self.review_screen, self.preview_screen,
-                  self.apply_screen, self.library_screen):
+                  self.apply_screen, self.library_screen, self.convert_screen):
             self.stack.addWidget(w)
 
         body.addWidget(self.stack, 1)
@@ -118,6 +121,8 @@ class MainWindow(QWidget, ResizeMixin):
             lambda msg, kind: self.toasts.show(msg, kind))
         self.library_screen.back.connect(
             lambda: self.go(APPLY if self.state.has_work else IMPORT))
+        self.convert_screen.toast.connect(
+            lambda msg, kind: self.toasts.show(msg, kind))
 
         self.state.assignments_changed.connect(self._update_nav)
 
@@ -166,6 +171,15 @@ class MainWindow(QWidget, ResizeMixin):
         self.nav_buttons[LIBRARY] = lib
         lay.addWidget(lib)
 
+        conv = QPushButton("⇄   Convert files")
+        conv.setObjectName("NavItem")
+        conv.setCheckable(True)
+        conv.setCursor(Qt.CursorShape.PointingHandCursor)
+        conv.clicked.connect(lambda: self.go(CONVERT))
+        self.nav_group.addButton(conv)
+        self.nav_buttons[CONVERT] = conv
+        lay.addWidget(conv)
+
         credit = QLabel("Cursor Set Studio v1.0<br>by Alperen Karabıyık")
         credit.setObjectName("Dim")
         credit.setTextFormat(Qt.TextFormat.RichText)
@@ -198,6 +212,7 @@ class MainWindow(QWidget, ResizeMixin):
         subtitle = {
             IMPORT: "", REVIEW: "Step 2 of 4", PREVIEW: "Step 3 of 4",
             APPLY: "Step 4 of 4", LIBRARY: "Library",
+            CONVERT: "Converter",
         }[index]
         if index == REVIEW and self.state.source_folder:
             subtitle = f"Step 2 of 4  ·  {self.state.source_folder.name}"
@@ -250,14 +265,43 @@ class MainWindow(QWidget, ResizeMixin):
         if self._scan_worker is not None:
             return
 
+        from ..core import archives
         self.import_screen.start_progress(folder)
-        worker = ScanWorker(folder, self)
-        worker.progress.connect(self.import_screen.update_progress)
-        worker.finished_ok.connect(self._on_scanned)
-        worker.failed.connect(self._on_scan_failed)
+
+        if folder.is_file() and archives.is_archive(folder):
+            worker = ExtractWorker(folder, self)
+            worker.status.connect(self.import_screen.set_status)
+            worker.progress.connect(self.import_screen.update_progress)
+            worker.finished_ok.connect(self._on_archive_scanned)
+            worker.failed.connect(self._on_scan_failed)
+        else:
+            worker = ScanWorker(folder, self)
+            worker.progress.connect(self.import_screen.update_progress)
+            worker.finished_ok.connect(self._on_scanned)
+            worker.failed.connect(self._on_scan_failed)
+
         worker.finished.connect(self._clear_worker)
         self._scan_worker = worker
         worker.start()
+
+    def _on_archive_scanned(self, result, archive, extracted) -> None:
+        """An archive finished extracting and scanning.
+
+        The scan points at files inside the extracted directory, so that
+        directory has to outlive the import. It is released when the next
+        import replaces it, or when the window closes.
+        """
+        self._release_extraction()
+        self._extracted = extracted
+        self._on_scanned(result, Path(archive))
+        if result.is_empty:
+            self._release_extraction()
+
+    def _release_extraction(self) -> None:
+        extracted = getattr(self, "_extracted", None)
+        if extracted is not None:
+            extracted.cleanup()
+            self._extracted = None
 
     def _cancel_scan(self) -> None:
         if self._scan_worker is not None:
@@ -349,4 +393,5 @@ class MainWindow(QWidget, ResizeMixin):
         if self._scan_worker is not None:
             self._scan_worker.cancel()
             self._scan_worker.wait(1500)
+        self._release_extraction()
         super().closeEvent(e)

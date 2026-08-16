@@ -41,6 +41,10 @@ no sign-out.**
   are copied into managed storage so the scheme cannot break later.
 - **Scheme library** — every set you build is kept, ready to reapply, rename,
   export, or delete.
+- **Format converter** — a built-in tool covering all twelve conversions
+  between PNG, ICO, CUR and ANI, in batches.
+- **Archive import** — open a cursor pack straight from a `.zip`, `.7z` or
+  `.rar` without unpacking it first.
 - **Export** — produce a shareable folder with an installer script for another
   machine.
 
@@ -79,6 +83,7 @@ Requires Windows 10 or 11 and Python 3.11+ (developed on 3.14 / PySide6 6.11).
 ```bash
 .venv\Scripts\python tests\test_core.py              # 30 checks, read-only
 .venv\Scripts\python tests\test_core.py --registry   # 45 checks, incl. registry
+.venv\Scripts\python tests\test_convert.py           # 36 checks, converter + archives
 .venv\Scripts\python cursor_set_studio\main.py --selftest   # UI + assets
 ```
 
@@ -146,6 +151,46 @@ click-to-set control on an enlarged preview.
 > formats are stable and well documented, so implementing them directly removes
 > two fragile dependencies and gives exact control over hotspots and timing.
 
+### The converter
+
+Every source is decoded into one intermediate form — a list of frames, each
+with an image, an optional hotspot and a duration — and every target is written
+from that. So twelve conversions are four readers and four writers rather than
+twelve special cases.
+
+|  | → PNG | → ICO | → CUR | → ANI |
+|---|---|---|---|---|
+| **PNG →** | – | yes | yes | yes |
+| **ICO →** | yes | – | yes | yes |
+| **CUR →** | yes | yes | – | yes |
+| **ANI →** | yes | yes | yes | – |
+
+What survives, and what cannot:
+
+- Hotspots are carried through wherever the target can store one. ICO and PNG
+  have nowhere to put one, so it is dropped and the UI says so; going the other
+  way, a hotspot is assigned (centre by default, or top-left).
+- Every resolution embedded in an `.ico`/`.cur` is preserved, and can be
+  written out as one PNG per size.
+- Animation frames survive to `.ani`, with the source's own per-frame timing.
+  Converting an animation to a static format keeps one frame, except to PNG
+  which can write them all.
+- Several stills can be **combined** into a single animation, which is how a
+  numbered frame run becomes one `.ani`.
+
+### Archives
+
+Cursor packs are usually distributed compressed, so `.zip`, `.7z` and `.rar`
+can be imported directly. This needs no third-party dependency: ZIP is handled
+by the standard library, and 7z/RAR by the bsdtar (libarchive) build Windows
+has shipped in `System32` since Windows 10 1803 — verified to read all three.
+An installed 7-Zip is used as a fallback, and if neither is available the user
+is told what to install rather than shown a stack trace.
+
+Archives are extracted to a temporary directory that is cleaned up afterwards,
+and every member path is validated first, so an entry named
+`..\..\Windows\System32\...` cannot write outside the extraction folder.
+
 ### Registry
 
 | What | Where |
@@ -210,6 +255,8 @@ cursor_set_studio/
 │   ├── scanner.py          recursive scan, junk filter, sequence detection
 │   ├── matcher.py          filename → role scoring
 │   ├── registry.py         HKCU read/write, live refresh, backup/restore
+│   ├── converter.py        the twelve format conversions
+│   ├── archives.py         zip / 7z / rar extraction, path-traversal safe
 │   └── library.py          managed storage, scheme index, export
 └── ui/
     ├── theme.py            palette tokens + stylesheet
