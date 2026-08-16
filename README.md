@@ -6,7 +6,7 @@
 
 **Turn a messy folder of cursor files into an installed Windows cursor scheme.**
 
-[![Build](https://github.com/USERNAME/cursor-set-studio/actions/workflows/build.yml/badge.svg)](https://github.com/USERNAME/cursor-set-studio/actions/workflows/build.yml)
+[![Build](https://github.com/alposhu/cursor-set-studio/actions/workflows/build.yml/badge.svg)](https://github.com/alposhu/cursor-set-studio/actions/workflows/build.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Windows](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D6)](https://www.microsoft.com/windows)
 [![Python](https://img.shields.io/badge/python-3.11%2B-3776AB)](https://www.python.org)
@@ -49,7 +49,7 @@ no sign-out.**
 ### Option 1 — the executable
 
 Download `Cursor Set Studio.exe` from the
-[Releases](https://github.com/USERNAME/cursor-set-studio/releases) page and run
+[Releases](https://github.com/alposhu/cursor-set-studio/releases) page and run
 it. No Python needed.
 
 > Windows SmartScreen may warn about an unrecognised publisher, since the
@@ -58,7 +58,7 @@ it. No Python needed.
 ### Option 2 — from source
 
 ```bash
-git clone https://github.com/USERNAME/cursor-set-studio.git
+git clone https://github.com/alposhu/cursor-set-studio.git
 cd cursor-set-studio
 python -m venv .venv
 .venv\Scripts\python -m pip install -r requirements.txt
